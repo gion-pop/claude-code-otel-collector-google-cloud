@@ -1,0 +1,45 @@
+# Usage:
+# gcloud builds submit --config=cloudbuild.yaml --substitutions=_PROJECT_ID="YOUR_PROJECT_ID"
+
+substitutions:
+  _PROJECT_ID: ${PROJECT_ID}
+  _REGION: asia-northeast1
+  _SERVICE_NAME: claude-code-otel-collector
+  _REPOSITORY_NAME: claude-code-otel-collector
+  _SERVICE_ACCOUNT_NAME: claude-code-otel-collector
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY_NAME}/${_SERVICE_NAME}'
+      - 'src/'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY_NAME}/${_SERVICE_NAME}'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY_NAME}/${_SERVICE_NAME}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--port=4318'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=1'
+      - '--max-instances=1'
+      - '--no-invoker-iam-check'
+      - '--service-account=${_SERVICE_ACCOUNT_NAME}@${_PROJECT_ID}.iam.gserviceaccount.com'
+      - '--update-secrets=BEARER_TOKEN=claude_code_otel_collector_bearer_token:latest'
+      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${_PROJECT_ID}'
+      - '--startup-probe=httpGet.path=/,httpGet.port=13133,periodSeconds=60,initialDelaySeconds=5,timeoutSeconds=5,failureThreshold=2'
+
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY_NAME}/${_SERVICE_NAME}'
